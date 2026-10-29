@@ -1,5 +1,4 @@
-// PixelPursuit server: serves the site, stores accounts in data/users.json
-// and passes product requests on to mockapi.io (writes need a logged-in user)
+// PixelPursuit server: serves the site and stores accounts and games as JSON files in data/
 const http = require('http')
 const fsp = require('fs/promises')
 const path = require('path')
@@ -8,14 +7,24 @@ const { promisify } = require('util')
 
 const scrypt = promisify(crypto.scrypt)
 
+// ---------- Settings (environment variables) ----------
+
 const PORT = Number(process.env.PORT) || 8080
 const ROOT = __dirname
-const USERS_FILE = process.env.USERS_FILE || path.join(ROOT, 'data', 'users.json')
-const PRODUCTS_API_URL = process.env.PRODUCTS_API_URL || 'https://65c5df9fe5b94dfca2e0746b.mockapi.io/PixelPursuit'
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data')
+const USERS_FILE = path.join(DATA_DIR, 'users.json')
+const GAMES_FILE = path.join(DATA_DIR, 'games.json')
+
+// NODE_ENV=production: site is served over HTTPS, so cookies get the Secure flag and browsers get HSTS
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+// TRUST_PROXY=1 when running behind one reverse proxy / load balancer (most hosts),
+// so the visitor's real IP is read from X-Forwarded-For. Leave unset otherwise: the header is easy to fake.
+const TRUST_PROXY = Number(process.env.TRUST_PROXY) || 0
+// Extra allowed origins for changes, comma separated (e.g. https://pixelpursuit.example.com)
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean)
 
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 // seconds
 const MAX_BODY_BYTES = 10000
-const MAX_FAILED_LOGINS = 10 // per IP, per 15 minutes
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -28,7 +37,31 @@ const CONTENT_TYPES = {
   '.svg': 'image/svg+xml',
 }
 
-// Max length of each product field (same limits as the form)
+// Sent with every response
+const SECURITY_HEADERS = {
+  // Only our own scripts run; styles and fonts only from us, cdnjs (normalize.css) and Google Fonts.
+  // Posters are links to other sites, so images may come from any https address.
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+    'font-src https://fonts.gstatic.com',
+    "img-src 'self' https: data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  ...(IS_PRODUCTION ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
+}
+
+// Max length of each game field (same limits as the form)
 const GAME_FIELDS = { title: 30, price: 6, poster: 500, description: 200, whereToBuy: 70 }
 
 class HttpError extends Error {
@@ -38,36 +71,47 @@ class HttpError extends Error {
   }
 }
 
-// ---------- Accounts (data/users.json) ----------
+// ---------- JSON file storage (data/users.json, data/games.json) ----------
 
-async function readUsers() {
-  try {
-    return JSON.parse(await fsp.readFile(USERS_FILE, 'utf8'))
-  } catch (error) {
-    if (error.code === 'ENOENT') return []
-    throw error
+// Each file is read and written one change at a time, so two requests can't overwrite each other
+function createJsonStore(file) {
+  let lock = Promise.resolve()
+
+  async function read() {
+    try {
+      return JSON.parse(await fsp.readFile(file, 'utf8'))
+    } catch (error) {
+      if (error.code === 'ENOENT') return []
+      throw error
+    }
+  }
+
+  async function write(items) {
+    await fsp.mkdir(path.dirname(file), { recursive: true })
+    const tempFile = file + '.tmp'
+    await fsp.writeFile(tempFile, JSON.stringify(items, null, 2))
+    await fsp.rename(tempFile, file)
+  }
+
+  return {
+    read,
+    update(change) {
+      const run = lock.then(async () => {
+        const items = await read()
+        const result = await change(items)
+        await write(items)
+        return result
+      })
+      lock = run.catch(() => {})
+      return run
+    },
   }
 }
 
-async function writeUsers(users) {
-  await fsp.mkdir(path.dirname(USERS_FILE), { recursive: true })
-  const tempFile = USERS_FILE + '.tmp'
-  await fsp.writeFile(tempFile, JSON.stringify(users, null, 2))
-  await fsp.rename(tempFile, USERS_FILE)
-}
+const usersStore = createJsonStore(USERS_FILE)
+const gamesStore = createJsonStore(GAMES_FILE)
 
-// Runs read-change-write one at a time so two sign-ups can't overwrite each other
-let usersLock = Promise.resolve()
-function updateUsers(change) {
-  const run = usersLock.then(async () => {
-    const users = await readUsers()
-    const result = await change(users)
-    await writeUsers(users)
-    return result
-  })
-  usersLock = run.catch(() => {})
-  return run
-}
+// ---------- Accounts ----------
 
 // Passwords are stored as a scrypt hash with a random per-user salt, never in plain text
 async function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -100,10 +144,14 @@ function validateCredentials(body) {
 
 const sessions = new Map() // token -> { username, expires }
 
+function sessionCookie(value, maxAge) {
+  return `session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${IS_PRODUCTION ? '; Secure' : ''}`
+}
+
 function createSession(res, username) {
   const token = crypto.randomBytes(32).toString('hex')
   sessions.set(token, { username, expires: Date.now() + SESSION_MAX_AGE * 1000 })
-  res.setHeader('Set-Cookie', `session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE}`)
+  res.setHeader('Set-Cookie', sessionCookie(token, SESSION_MAX_AGE))
 }
 
 function getSessionToken(req) {
@@ -129,24 +177,65 @@ function requireUser(req) {
   return username
 }
 
-// Slows down password guessing: too many failed logins from one IP are refused for a while
-const failedLogins = new Map() // ip -> { count, resetAt }
+// ---------- Request checks ----------
 
-function checkLoginLimit(ip) {
-  const entry = failedLogins.get(ip)
-  if (entry && entry.resetAt < Date.now()) failedLogins.delete(ip)
-  else if (entry && entry.count >= MAX_FAILED_LOGINS) {
-    throw new HttpError(429, 'Too many failed logins. Try again in 15 minutes.')
+// The visitor's IP. Behind a trusted proxy it's the address that proxy saw, not one the visitor wrote.
+function getClientIp(req) {
+  if (TRUST_PROXY) {
+    const forwarded = (req.headers['x-forwarded-for'] || '').split(',').map(ip => ip.trim()).filter(Boolean)
+    if (forwarded.length >= TRUST_PROXY) return forwarded[forwarded.length - TRUST_PROXY]
+  }
+  return req.socket.remoteAddress
+}
+
+// Changes must come from a page on this site, so other websites can't act for a logged-in visitor
+function checkOrigin(req) {
+  const origin = req.headers.origin
+  if (!origin) throw new HttpError(403, 'Missing Origin header')
+  let originHost
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    throw new HttpError(403, 'Bad Origin header')
+  }
+  const host = (TRUST_PROXY && req.headers['x-forwarded-host']) || req.headers.host
+  if (originHost !== host && !ALLOWED_ORIGINS.includes(origin)) {
+    throw new HttpError(403, 'Request from another site was blocked')
   }
 }
 
-function recordFailedLogin(ip) {
-  const entry = failedLogins.get(ip) || { count: 0, resetAt: Date.now() + 15 * 60 * 1000 }
-  entry.count++
-  failedLogins.set(ip, entry)
+// Counts hits per key (IP or username) and refuses once `max` is reached within `windowMs`
+function createRateLimiter(max, windowMs, message) {
+  const hits = new Map() // key -> { count, resetAt }
+
+  // Forget old entries so the map can't grow forever
+  setInterval(() => {
+    const now = Date.now()
+    for (const [key, entry] of hits) if (entry.resetAt < now) hits.delete(key)
+  }, 10 * 60 * 1000).unref()
+
+  return {
+    check(key) {
+      const entry = hits.get(key)
+      if (entry && entry.resetAt >= Date.now() && entry.count >= max) throw new HttpError(429, message)
+    },
+    hit(key) {
+      let entry = hits.get(key)
+      if (!entry || entry.resetAt < Date.now()) {
+        entry = { count: 0, resetAt: Date.now() + windowMs }
+        hits.set(key, entry)
+      }
+      entry.count++
+    },
+  }
 }
 
-// ---------- Products (mockapi.io) ----------
+const MINUTE = 60 * 1000
+const failedLoginLimit = createRateLimiter(10, 15 * MINUTE, 'Too many failed logins. Try again in 15 minutes.')
+const signupLimit = createRateLimiter(5, 60 * MINUTE, 'Too many new accounts from your network. Try again later.')
+const gameWriteLimit = createRateLimiter(30, 10 * MINUTE, 'Too many changes. Please wait a few minutes.')
+
+// ---------- Games ----------
 
 function cleanGame(body) {
   const game = {}
@@ -165,27 +254,18 @@ function cleanGame(body) {
   return game
 }
 
-async function productsApi(method, id, body) {
-  const url = id ? `${PRODUCTS_API_URL}/${encodeURIComponent(id)}` : PRODUCTS_API_URL
-  const response = await fetch(url, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  // mockapi answers 500 (not 404) for ids that were deleted
-  if (id && (response.status === 404 || response.status === 500)) throw new HttpError(404, 'Game not found')
-  if (!response.ok) throw new HttpError(502, 'The product service is not responding. Please try again later.')
-  return response.json()
+function findGameIndex(games, id) {
+  const index = games.findIndex(game => game.id === id)
+  if (index === -1) throw new HttpError(404, 'Game not found')
+  return index
 }
 
 // Games listed by an account can only be changed by that account.
-// Older games have no owner, so any logged-in user may change them.
-async function getEditableGame(id, username) {
-  const game = await productsApi('GET', id)
+// Games without an owner (added before accounts existed) can be changed by any logged-in user.
+function checkCanEdit(game, username) {
   if (game.owner && game.owner !== username) {
     throw new HttpError(403, 'You can only change games you listed')
   }
-  return game
 }
 
 // ---------- HTTP helpers ----------
@@ -230,31 +310,36 @@ async function handleApi(req, res, pathname) {
   const method = req.method
   const gameMatch = pathname.match(/^\/api\/games\/([A-Za-z0-9_-]+)$/)
 
+  if (method !== 'GET') checkOrigin(req)
+
   if (pathname === '/api/me' && method === 'GET') {
     const username = getCurrentUser(req)
     return username ? sendJson(res, 200, { username }) : sendJson(res, 401, { error: 'Not logged in' })
   }
 
   if (pathname === '/api/register' && method === 'POST') {
+    const ip = getClientIp(req)
+    signupLimit.check(ip)
     const { username, password } = validateCredentials(await readJsonBody(req))
     const { salt, hash } = await hashPassword(password)
-    await updateUsers(users => {
+    await usersStore.update(users => {
       if (findUser(users, username)) throw new HttpError(409, 'That username is taken')
       users.push({ username, salt, hash, createdAt: new Date().toISOString() })
     })
+    signupLimit.hit(ip)
     createSession(res, username)
     return sendJson(res, 201, { username })
   }
 
   if (pathname === '/api/login' && method === 'POST') {
-    const ip = req.socket.remoteAddress
-    checkLoginLimit(ip)
+    const ip = getClientIp(req)
+    failedLoginLimit.check(ip)
     const body = await readJsonBody(req)
     const username = typeof body.username === 'string' ? body.username.trim() : ''
     const password = typeof body.password === 'string' ? body.password : ''
-    const user = findUser(await readUsers(), username)
+    const user = findUser(await usersStore.read(), username)
     if (!user || !(await isCorrectPassword(password, user))) {
-      recordFailedLogin(ip)
+      failedLoginLimit.hit(ip)
       throw new HttpError(401, 'Wrong username or password')
     }
     createSession(res, user.username)
@@ -264,38 +349,55 @@ async function handleApi(req, res, pathname) {
   if (pathname === '/api/logout' && method === 'POST') {
     const token = getSessionToken(req)
     if (token) sessions.delete(token)
-    res.setHeader('Set-Cookie', 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0')
+    res.setHeader('Set-Cookie', sessionCookie('', 0))
     return sendJson(res, 200, { ok: true })
   }
 
   if (pathname === '/api/games' && method === 'GET') {
-    return sendJson(res, 200, await productsApi('GET'))
-  }
-
-  if (pathname === '/api/games' && method === 'POST') {
-    const username = requireUser(req)
-    const game = cleanGame(await readJsonBody(req))
-    return sendJson(res, 201, await productsApi('POST', null, { ...game, owner: username }))
+    return sendJson(res, 200, await gamesStore.read())
   }
 
   if (gameMatch && method === 'GET') {
-    return sendJson(res, 200, await productsApi('GET', gameMatch[1]))
+    const games = await gamesStore.read()
+    return sendJson(res, 200, games[findGameIndex(games, gameMatch[1])])
   }
 
-  if (gameMatch && method === 'PUT') {
-    const username = requireUser(req)
-    const game = cleanGame(await readJsonBody(req))
-    await getEditableGame(gameMatch[1], username)
-    return sendJson(res, 200, await productsApi('PUT', gameMatch[1], game))
+  // Everything below changes games: logged-in users only, with a per-user limit
+  const isGameWrite = (pathname === '/api/games' && method === 'POST')
+    || (gameMatch && (method === 'PUT' || method === 'DELETE'))
+  if (!isGameWrite) throw new HttpError(404, 'Not found')
+
+  const username = requireUser(req)
+  gameWriteLimit.check(username)
+  const changes = method === 'DELETE' ? null : cleanGame(await readJsonBody(req))
+  gameWriteLimit.hit(username)
+
+  if (method === 'POST') {
+    const newGame = await gamesStore.update(games => {
+      const nextId = games.reduce((max, game) => Math.max(max, Number(game.id) || 0), 0) + 1
+      const game = { id: String(nextId), ...changes, owner: username, createdAt: new Date().toISOString() }
+      games.push(game)
+      return game
+    })
+    return sendJson(res, 201, newGame)
   }
 
-  if (gameMatch && method === 'DELETE') {
-    const username = requireUser(req)
-    await getEditableGame(gameMatch[1], username)
-    return sendJson(res, 200, await productsApi('DELETE', gameMatch[1]))
+  if (method === 'PUT') {
+    const game = await gamesStore.update(games => {
+      const index = findGameIndex(games, gameMatch[1])
+      checkCanEdit(games[index], username)
+      games[index] = { ...games[index], ...changes, updatedAt: new Date().toISOString() }
+      return games[index]
+    })
+    return sendJson(res, 200, game)
   }
 
-  throw new HttpError(404, 'Not found')
+  const deleted = await gamesStore.update(games => {
+    const index = findGameIndex(games, gameMatch[1])
+    checkCanEdit(games[index], username)
+    return games.splice(index, 1)[0]
+  })
+  return sendJson(res, 200, deleted)
 }
 
 // ---------- Static files ----------
@@ -316,7 +418,6 @@ async function serveStatic(res, pathname) {
     const content = await fsp.readFile(filePath)
     res.writeHead(200, {
       'Content-Type': CONTENT_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'X-Content-Type-Options': 'nosniff',
     })
     res.end(content)
   } catch {
@@ -326,6 +427,15 @@ async function serveStatic(res, pathname) {
 }
 
 const server = http.createServer(async (req, res) => {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value)
+
+  // Behind an HTTPS proxy in production, send plain-http visitors to the https address
+  if (IS_PRODUCTION && TRUST_PROXY && req.headers['x-forwarded-proto'] === 'http') {
+    const host = req.headers['x-forwarded-host'] || req.headers.host
+    res.writeHead(301, { Location: `https://${host}${req.url}` })
+    return res.end()
+  }
+
   let pathname
   try {
     pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname)
@@ -346,5 +456,5 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`PixelPursuit running at http://localhost:${PORT}`)
+  console.log(`PixelPursuit running at http://localhost:${PORT}${IS_PRODUCTION ? ' (production mode)' : ''}`)
 })

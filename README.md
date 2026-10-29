@@ -26,9 +26,18 @@ Then open http://localhost:8080. Use a different port with the `PORT` environmen
   Passwords are never stored: each user gets a random salt and a scrypt hash of salt + password.
 - **Login** sets an HttpOnly session cookie that lasts 7 days. Sessions are kept in memory,
   so restarting the server logs everyone out.
-- **Games** are stored in a [mockapi.io](https://mockapi.io) project. The browser talks only to
-  `/api/games` on this server, which checks who is logged in before adding, editing or deleting.
-  New games record their owner. Older games without an owner can be edited by any logged-in user.
+- **Games** are saved in `data/games.json`. Only logged-in users can add games, and only the
+  account that listed a game can edit or delete it.
+- Both JSON files are written one change at a time (write to a temp file, then rename), so
+  requests can't overwrite each other. Back up the `data/` folder.
+
+## Security
+
+- Every response sends a Content-Security-Policy (only the site's own scripts run), plus
+  `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`.
+- Changes (`POST`/`PUT`/`DELETE`) must come with an `Origin` header from this site.
+- Rate limits: 10 failed logins per IP per 15 minutes, 5 sign-ups per IP per hour,
+  30 game changes per user per 10 minutes.
 
 | Endpoint | What it does |
 | --- | --- |
@@ -44,7 +53,17 @@ Then open http://localhost:8080. Use a different port with the `PORT` environmen
 `style.css` is compiled from `style.sass`. After editing the Sass file run `npm run sass`.
 The other pages use plain CSS (`formPage/form.css` is shared by the form and account pages).
 
-## Note
+## Running in production
 
-The mockapi URL itself is public and has no login. Anyone who finds it in `server.js` can still change
-games directly, so the server's checks only protect people who use the site.
+Put the server behind HTTPS (most hosts do this for you) and set:
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `NODE_ENV` | `production` | Adds the `Secure` flag to the login cookie and sends HSTS |
+| `TRUST_PROXY` | `1` (number of proxies in front) | Rate limits use the visitor's real IP from `X-Forwarded-For`, and plain-http visitors are sent to https. Leave unset if nothing sits in front of the server, because the header can be faked |
+| `ALLOWED_ORIGINS` | e.g. `https://pixelpursuit.example.com` | Only needed if the proxy changes the `Host` header |
+| `DATA_DIR` | a folder outside the app | Where `users.json` and `games.json` live (default `./data`) |
+| `PORT` | e.g. `8080` | Port to listen on |
+
+Run it with a process manager (systemd, pm2 or the host's own) so it restarts after a crash,
+as a normal user (not root/administrator).

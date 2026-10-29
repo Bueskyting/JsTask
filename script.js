@@ -1,73 +1,63 @@
 const gamesListElement = document.getElementById('games-list')
-const gameForm = document.getElementById('gameForm')
-const sortCriteriaSelect = document.getElementById('sortCriteria')
+const gamesStatusElement = document.getElementById('games-status')
+
+document.getElementById('year').textContent = new Date().getFullYear()
+
+// Shows "$ 69.96" for numeric prices, the raw value otherwise
+function formatPrice(price) {
+  const number = Number(price)
+  return Number.isFinite(number) ? '$ ' + number.toFixed(2) : '$ ' + price
+}
+
+// Swaps a broken poster for a "No image" placeholder
+function showPosterPlaceholder(posterElement) {
+  const placeholder = document.createElement('div')
+  placeholder.classList.add('game-poster', 'poster-placeholder')
+  placeholder.textContent = 'No image'
+  posterElement.replaceWith(placeholder)
+}
 
 function displayGames() {
-  fetch('https://65c5df9fe5b94dfca2e0746b.mockapi.io/PixelPursuit')
-    .then(response => response.json())
+  apiRequest('GET', '/api/games')
     .then(games => {
-      games.sort((a, b) => a.price - b.price)
+      games.sort((a, b) => Number(a.price) - Number(b.price))
 
       gamesListElement.innerHTML = ''
+      gamesStatusElement.textContent = games.length ? '' : 'No games listed yet. Be the first to add one!'
 
       games.forEach(game => {
-        const gameCard = document.createElement('div')
+        const gameCard = document.createElement('article')
         gameCard.classList.add('game-card')
+
+        // The whole card links to the product page
+        const cardLink = document.createElement('a')
+        cardLink.href = 'productPage/product.html?id=' + encodeURIComponent(game.id)
+
+        const posterElement = document.createElement('img')
+        posterElement.src = game.poster
+        posterElement.alt = '' // title is already in the link text
+        posterElement.loading = 'lazy'
+        posterElement.classList.add('game-poster')
+        posterElement.addEventListener('error', () => showPosterPlaceholder(posterElement))
+        cardLink.appendChild(posterElement)
 
         const titleElement = document.createElement('h2')
         titleElement.textContent = game.title
-        gameCard.appendChild(titleElement)
+        cardLink.appendChild(titleElement)
 
         const priceElement = document.createElement('p')
-        priceElement.textContent = '$ ' + game.price
-        gameCard.appendChild(priceElement)
+        priceElement.classList.add('game-price')
+        priceElement.textContent = formatPrice(game.price)
+        cardLink.appendChild(priceElement)
 
-        const posterLink = document.createElement('a')
-        posterLink.href = '/productPage/product.html?id=' + game.id
-        const posterElement = document.createElement('img')
-        posterElement.src = game.poster
-        posterElement.alt = game.title + ''
-        posterElement.classList.add('game-poster')
-        posterLink.appendChild(posterElement)
-        gameCard.appendChild(posterLink)
-
+        gameCard.appendChild(cardLink)
         gamesListElement.appendChild(gameCard)
       })
+    })
+    .catch(error => {
+      console.error('Error fetching games:', error)
+      gamesStatusElement.textContent = 'Could not load games. Please try again later.'
     })
 }
 
 displayGames()
-
-gameForm.addEventListener('submit', function(event) {
-  event.preventDefault()
-
-  const titleInput = document.getElementById('title')
-  const priceInput = document.getElementById('price')
-  const posterUrlInput = document.getElementById('posterUrl')
-  const gameIdInput = document.getElementById('gameId')
-
-  const gameData = {
-    title: titleInput.value,
-    price: priceInput.value,
-    poster: posterUrlInput.value
-  }
-
-  const gameId = gameIdInput.value
-
-  const requestMethod = gameId ? 'PUT' : 'POST'
-  const apiUrl = gameId ? `https://65c5df9fe5b94dfca2e0746b.mockapi.io/PixelPursuit/${gameId}` : 'https://65c5df9fe5b94dfca2e0746b.mockapi.io/PixelPursuit'
-
-  fetch(apiUrl, {
-    method: requestMethod,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(gameData),
-  })
-    .then(response => response.json())
-    .then(data => {
-      alert('Game information submitted!')
-      displayGames()
-      gameForm.reset()
-    })
-})

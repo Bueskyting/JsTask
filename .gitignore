@@ -1,0 +1,3 @@
+# Accounts (usernames + password hashes) stay on the machine running the server
+data/
+node_modules/

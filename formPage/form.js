@@ -1,87 +1,133 @@
-document.getElementById('itemForm').addEventListener('submit', function(event) {
+// form.html lists a new product, form.html?id=3 edits product 3
+const gameId = new URLSearchParams(window.location.search).get('id')
+const isEditing = Boolean(gameId)
+const GAME_FIELDS = ['title', 'price', 'poster', 'description', 'whereToBuy']
+
+const itemForm = document.getElementById('itemForm')
+const submitButton = document.getElementById('submitButton')
+const screenEffect = document.getElementById('screenEffect')
+const formMessage = document.getElementById('formMessage')
+const formNotice = document.getElementById('formNotice')
+const formHeading = document.getElementById('formHeading')
+
+function showFormMessage(text, type) {
+    formMessage.textContent = text
+    formMessage.className = type
+}
+
+// Replaces the form with a message (optionally ending in a link)
+function showNotice(text, linkText, linkHref) {
+    formNotice.textContent = text
+    if (linkText) {
+        const link = document.createElement('a')
+        link.href = linkHref
+        link.textContent = linkText
+        formNotice.append(' ', link)
+    }
+    formNotice.hidden = false
+    itemForm.hidden = true
+}
+
+// Only logged-in users get the form; in edit mode it is filled with the current values
+currentUserPromise.then(username => {
+    if (!username) {
+        const loginUrl = '../accountPage/account.html?next=' + encodeURIComponent(location.pathname + location.search)
+        showNotice(`You need to be logged in to ${isEditing ? 'edit' : 'list'} products.`, 'Log in or create an account', loginUrl)
+        return
+    }
+
+    if (!isEditing) {
+        itemForm.hidden = false
+        return
+    }
+
+    formHeading.textContent = 'Edit product'
+    document.title = 'Edit product – PixelPursuit'
+    submitButton.querySelector('span').textContent = 'Save changes'
+
+    apiRequest('GET', '/api/games/' + encodeURIComponent(gameId))
+        .then(game => {
+            if (game.owner && game.owner !== username) {
+                showNotice('You can only edit games you listed.')
+                return
+            }
+            GAME_FIELDS.forEach(field => {
+                itemForm.elements[field].value = game[field] || ''
+            })
+            itemForm.hidden = false
+        })
+        .catch(error => showNotice(error.message, 'Back to the home page', '../index.html'))
+})
+
+itemForm.addEventListener('submit', function(event) {
     event.preventDefault()
-  
-    // Display screen effect
-    document.getElementById('screenEffect').style.display = 'block'
-  
+
+    // Display screen effect and block double submits
+    screenEffect.style.display = 'block'
+    submitButton.disabled = true
+    showFormMessage('', '')
+
     const formData = new FormData(this)
     const newItem = {}
     formData.forEach((value, key) => {
-        newItem[key] = value
+        newItem[key] = value.trim()
     })
-  
-    // Fetching data to API
-    fetch('https://65c5df9fe5b94dfca2e0746b.mockapi.io/PixelPursuit', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newItem)
-    })
-    .then(response => {
-        if (response.ok) {
-            // Show success message
-            document.getElementById('successMessage').style.display = 'block'
-            setTimeout(() => {
-              document.getElementById('successMessage').style.display = 'none'
-            }, 5000) // Hide success message after 5 seconds
-            this.reset()
-        } else {
-            console.error('Error:', error)
-            alert('An error has occurred. please try again.')
+
+    // Sending data to the server, which passes it on to the API
+    const request = isEditing
+        ? apiRequest('PUT', '/api/games/' + encodeURIComponent(gameId), newItem)
+        : apiRequest('POST', '/api/games', newItem)
+
+    request
+    .then(() => {
+        if (isEditing) {
+            window.location.assign('../productPage/product.html?id=' + encodeURIComponent(gameId))
+            return
         }
-        // Hide screen effect regardless of success or failure
-        document.getElementById('screenEffect').style.display = 'none'
+        showFormMessage('Your product has been listed successfully!', 'success')
+        this.reset()
     })
     .catch(error => {
         console.error('Error:', error)
-        alert('An error has occurred. please try again.')
-        // Hide screen effect in case of error
-        document.getElementById('screenEffect').style.display = 'none'
+        showFormMessage(error.message, 'error')
     })
-  })
-  // Only allow numbers and 1 dot
-  function validatePrice(input) {   
+    .finally(() => {
+        // Hide screen effect regardless of success or failure
+        screenEffect.style.display = 'none'
+        submitButton.disabled = false
+    })
+})
+
+// Only allow numbers and 1 dot
+function validatePrice(input) {
 
     input.value = input.value.replace(/[^0-9.]/g, '')
 
     input.value = input.value.replace(/^0+(?=\d)/, '')
-    
-    input.value = input.value.replace(/(\..*)\./g, '$1')
 
-    let dotCount = (input.value.match(/\./g) || []).length
-    if (dotCount > 1) {
-        input.value = input.value.substring(0, input.value.lastIndexOf('.'))
-    }
+    // Keep the first dot, drop the rest
+    const [whole, ...decimals] = input.value.split('.')
+    input.value = decimals.length ? whole + '.' + decimals.join('') : whole
 }
+
+document.getElementById('price').addEventListener('input', event => validatePrice(event.target))
+
 // Clear input field if any of these words were ever used, keep in mind that the whole text is going to be deleted in case of inappropriate language
-const titleInput = document.getElementById('title')
-const poster = document.getElementById('poster')
-const descriptionInput = document.getElementById('description')
-const whereToBuy = document.getElementById('whereToBuy')
-
 const textFilter = document.getElementById('textFilter')
+const explicitWords = ['n word', 'b word', 'i word'] // An array of explicit words (no empty strings, they match everything)
 
-// Add event listeners to each input field
-titleInput.addEventListener('input', checkForExplicitWords)
-poster.addEventListener('input', checkForExplicitWords)
-descriptionInput.addEventListener('input', checkForExplicitWords)
-whereToBuy.addEventListener('input', checkForExplicitWords)
+const filteredFields = ['title', 'poster', 'description', 'whereToBuy']
+filteredFields.forEach(id => {
+    document.getElementById(id).addEventListener('input', checkForExplicitWords)
+})
 
 function checkForExplicitWords(event) {
-    const inputText = event.target.value
-    const explicitWords = ['n word', 'b word', 'i word', '', ''] // An array of explicit words
-    let hasExplicitWord = false
+    const inputText = event.target.value.toLowerCase()
+    const hasExplicitWord = explicitWords.some(word => inputText.includes(word))
 
-    explicitWords.forEach(word => {
-        if (inputText.toLowerCase().includes(word)) {
-            event.target.value = ''
-            hasExplicitWord = true
-        }
-    })
-
-    // If explicit word found, display message
+    // If explicit word found, clear the field and display message
     if (hasExplicitWord) {
+        event.target.value = ''
         textFilter.textContent = 'Please remain polite'
     } else {
         textFilter.textContent = ''

@@ -3,48 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link 
-    rel="stylesheet" 
+  <link
+    rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
     integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
-  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
   <title>PixelPursuit</title>
 
 </head>
 <body>
 
-  <div class="banner-image"></div>
+  <header class="site-header">
+    <h1 class="logo"><a href="./">PixelPursuit</a></h1>
+    <div class="header-actions">
+      <div class="account-links" data-base=""></div>
+      <a class="list-item" href="formPage/form.html">+ Add new product</a>
+    </div>
+  </header>
 
-  <div id="games-list"></div>
-
-  <a class="list-item" href="/formPage/form.html">Add new product</a>
+  <main>
+    <p id="games-status" class="games-status" role="status">Loading games…</p>
+    <div id="games-list" class="games-list"></div>
+  </main>
 
   <footer>
 
     <div class="footer-content">
-      <div class="footer-section about">
-        <h3>About Us</h3>
+      <section class="footer-section about">
+        <h2>About Us</h2>
         <p>
           Discover a vast collection of computer games for sale, offering endless entertainment and immersive experiences.
           Explore our online store for a wide selection of computer games, providing thrilling adventures and captivating gameplay.
           Find the latest computer games for purchase, offering an array of genres and exciting challenges to satisfy every gamer's craving.
         </p>
-      </div>
-      <div class="footer-section contact">
-        <h3>Contact Us</h3>
-        <p>Email: pixelpursuit@office.lt</p>
-        <p>Phone: +370 6 3829 719</p>
-      </div>
+      </section>
+      <section class="footer-section contact">
+        <h2>Contact Us</h2>
+        <p>Email: <a href="mailto:pixelpursuit@office.lt">pixelpursuit@office.lt</a></p>
+        <p>Phone: <a href="tel:+37063829719">+370 6 3829 719</a></p>
+      </section>
     </div>
     <div class="footer-bottom">
-      &copy; 2024 PixelPursuit. All rights reserved.
+      &copy; 2024–<span id="year">2026</span> PixelPursuit. All rights reserved.
     </div>
   </footer>
-  
+
+  <script src="auth.js"></script>
   <script src="script.js"></script>
 
 </body>

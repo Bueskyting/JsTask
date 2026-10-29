@@ -1,0 +1,14 @@
+{
+  "name": "pixelpursuit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small game store with accounts stored in a JSON file",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "sass": "npx sass style.sass style.css"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,46 +1,117 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
+/* Colours shared with style.sass and productPage/product.css */
+:root {
+  --bg: #0e1026;
+  --grid: rgba(0, 174, 255, 0.08);
+  --card: rgba(22, 26, 58, 0.92);
+  --text: #e8ecff;
+  --muted: #a9b2d6;
+  --accent: #00aeff;
+  --button: #1f6fd1;
+  --button-hover: #0052f7;
+  --focus: #ffd400;
+}
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Pixel grid background (replaces the deleted postimg.cc gif) */
 body {
-  font-family: Arial, sans-serif;
-  margin: 20px;
+  margin: 0;
+  min-height: 100vh;
+  padding: 24px 16px 48px;
   font-family: "Pixelify Sans", sans-serif;
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 50% 0, rgba(0, 174, 255, 0.18), transparent 60%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+}
+
+main {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: #00ff40;
+  font-size: clamp(26px, 6vw, 34px);
+  text-align: center;
+  margin: 24px 0 8px;
+  text-shadow: 3px 3px 0 #000;
 }
 
 form {
-  max-width: 400px;
-  margin: 0 auto;
+  background-color: var(--card);
+  border: 2px solid rgba(0, 174, 255, 0.5);
+  border-radius: 10px;
+  box-shadow: 6px 6px 0 rgba(0, 174, 255, 0.35);
+  padding: 24px 20px;
 }
 
 label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
+  font-size: 18px;
 }
 
-input[type="text"],
-input[type="number"],
+input,
 textarea {
-  box-shadow: 1px 1px 3px 3px #5188fd;
-  background: transparent;
+  display: block;
   width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  resize: none;
+  padding: 10px;
+  margin-bottom: 18px;
+  font: 16px system-ui, sans-serif;
+  color: var(--text);
+  background-color: rgba(0, 0, 0, 0.45);
+  border: 2px solid #5188fd;
+  border-radius: 6px;
+  resize: vertical;
 }
 
-/* Home page button */
+input::placeholder,
+textarea::placeholder {
+  color: #8790b8;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Home page link */
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
 nav #navButton {
+  display: inline-block;
   border-radius: 10px;
   padding: 10px 20px;
-  background-color: #288df8;
+  background-color: var(--button);
   color: #ffffff;
-  cursor: pointer;
-  transition: all 1s;
-  border: none;
+  text-decoration: none;
+  transition: all 0.5s;
   position: relative;
+  box-shadow: 4px 4px 0 #000;
 }
 
 nav #navButton:hover {
-  background-color: #0052f7;
+  background-color: var(--button-hover);
   padding-left: 40px;
 }
 
@@ -51,7 +122,7 @@ nav #navButton:after {
   top: 50%;
   left: 0px;
   transform: translateY(-50%);
-  transition: opacity 1s, left 1s;
+  transition: opacity 0.5s, left 0.5s;
 }
 
 nav #navButton:hover:after {
@@ -60,28 +131,37 @@ nav #navButton:hover:after {
 }
 
 /* Submit button */
-form #submitButton {
+.submit-button {
+  display: block;
+  width: 100%;
   border-radius: 10px;
-  padding: 10px 20px;
-  background-color: #288df8;
+  padding: 12px 20px;
+  font: inherit;
+  font-size: 18px;
+  background-color: var(--button);
   color: #fff;
   border: none;
   cursor: pointer;
-  transition: all 1s;
+  transition: all 0.5s;
+  box-shadow: 4px 4px 0 #000;
 }
 
-#submitButton span {
-  cursor: pointer;
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.submit-button span {
   display: inline-block;
   position: relative;
   transition: 0.5s;
 }
 
-#submitButton:hover {
-  background-color: #0056b3;
+.submit-button:hover:enabled {
+  background-color: var(--button-hover);
 }
 
-#submitButton span:after {
+.submit-button span:after {
   content: '>>';
   position: absolute;
   opacity: 0;
@@ -90,25 +170,37 @@ form #submitButton {
   transition: 0.5s;
 }
 
-#submitButton:hover span {
+.submit-button:hover:enabled span {
   padding-right: 25px;
 }
 
-#submitButton:hover span:after {
+.submit-button:hover:enabled span:after {
   opacity: 1;
   right: 0;
 }
 
-nav h2 {
+#textFilter {
+  color: #ff6b6b;
+  font-size: 22px;
+  text-align: center;
+  min-height: 1.5em;
+  margin: 0 0 8px;
+}
+
+#formMessage {
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+#formMessage.success {
   color: #00ff40;
 }
 
-#textFilter {
-  color: #eb0e0e;
-  font-size: 26px;
+#formMessage.error {
+  color: #ff6b6b;
 }
 
-/* Screen effect after listing an item */
+/* Screen effect while a product is being listed */
 #screenEffect {
   position: fixed;
   top: 0;
@@ -120,121 +212,63 @@ nav h2 {
   display: none;
 }
 
-#successMessage {
-  position: fixed;
-  top: 80%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: white;
-  padding: 20px;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+/* Log in / Log out links in the nav (filled by auth.js) */
+.account-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-name {
+  color: var(--muted);
+}
+
+.account-button,
+.link-button {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Shown instead of the form (not logged in, game not found, ...) */
+.form-notice {
+  text-align: center;
+  font-size: 18px;
+}
+
+.form-notice a {
+  color: var(--accent);
+}
+
+/* Account page */
+.field-hint {
+  margin: -12px 0 18px;
+  font: 14px system-ui, sans-serif;
+  color: var(--muted);
+}
+
+.form-error {
+  color: #ff6b6b;
+  text-align: center;
+  margin: 16px 0 0;
+}
+
+.form-error:empty {
   display: none;
 }
 
-/* Mdia queries for smaller screens */
-/* Adjustments for iPad 9th gen */
-@media only screen
-  and (min-device-width: 768px) 
-  and (max-device-width: 1024px) 
-  and (-webkit-min-device-pixel-ratio: 1) {
-    body {
-      font-size: 16px;
-    }
-    form {
-      max-width: 90%;
-
-    }
-    label {
-      font-size: 18px;
-    }
-    nav {
-      margin-top: 5%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 20%;
-    }
-    h2 {
-      text-align: center;
-      margin-top: 30px;
-    }
-    .home-page-button {
-      display: flex;
-      justify-content: center;
-    }
-    .background {
-      width: 100%;
-      height: 100%;
-      background-size: cover;
-      background-position: center;
-    }
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
-    #submitButton {
-      position: absolute;
-      bottom: 7.5%;
-      left: 50%;
-      transform: translateX(-50%);
-  }
+.switch-form {
+  text-align: center;
+  margin: 20px 0 0;
+  color: var(--muted);
 }
-/* Adjustments for iPhone 12 Pro */
-@media only screen 
-  and (min-device-width: 375px) 
-  and (max-device-width: 812px) 
-  and (-webkit-min-device-pixel-ratio: 3) {
-    body {
-      font-size: 14px;
-    }
-    form {
-      justify-content: center;
-      max-width: 80%;
-    }
-    label {
-      font-size: 16px;
-    }
-    input[type="text"],
-    input[type="number"],
-    textarea {
-      padding: 6px;
-    }
-  
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
-    .background {
-      background-size: cover;
-      background-position: center;
-      height: 100%;
-    }
-    nav {
-      margin-top: 5%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 20%;
-    }
-    h2 {
-      text-align: center;
-      margin-top: 30px;
-    }
-    .home-page-button {
-      display: flex;
-      justify-content: center;
-    }
-    #submitButton {
-      position: absolute;
-      bottom: 12.5%;
-      left: 50%;
-      transform: translateX(-50%);
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
   }
 }

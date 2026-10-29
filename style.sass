@@ -1,143 +1,228 @@
-// Importing pixel font using google API (also used in other pages)
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap')
+// Pixel font is loaded with <link> tags in index.html (also used in other pages)
 
+// Colours shared with formPage/form.css and productPage/product.css
+$bg: #0e1026
+$grid: rgba(0, 174, 255, 0.08)
+$card: #161a3a
+$text: #e8ecff
+$muted: #a9b2d6
+$accent: #00aeff
+$button: #1f6fd1
+$button-hover: #0052f7
+$focus: #ffd400
+$pixel-font: "Pixelify Sans", sans-serif
+
+*,
+*::before,
+*::after
+  box-sizing: border-box
+
+// Pixel grid background (replaces the deleted postimg.cc gif)
 body
-  background-image: url('https://i.postimg.cc/J0rQ2Hdm/gif.gif')
-  background-size: cover
-  background-repeat: no-repeat
+  background-color: $bg
+  background-image: radial-gradient(circle at 50% 0, rgba(0, 174, 255, 0.18), transparent 60%), linear-gradient($grid 1px, transparent 1px), linear-gradient(90deg, $grid 1px, transparent 1px)
+  background-size: 100% 100%, 24px 24px, 24px 24px
+  background-attachment: fixed
+  color: $text
+  font-family: $pixel-font
   display: flex
   flex-direction: column
   min-height: 100vh
   margin: 0
 
-.banner-image
-  background-image: url("https://i.postimg.cc/XqKYppVZ/banner.png")
-  margin-top: 1.5%
-  margin-bottom: 1%
-  margin-left: 35%
-  background-repeat: no-repeat
-  height: 190px
-  background-position: center
+a:focus-visible
+  outline: 3px solid $focus
+  outline-offset: 3px
 
-.game-card
-  font-family: "Pixelify Sans", sans-serif
-  color: #00aeff
-  padding: 10px
-  margin: 10px
-  margin-bottom: 3%
-  width: 225px
-  display: inline-block
-  position: relative
-  max-height: 450px
+// Header with text logo (replaces the deleted banner image)
+.site-header
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: space-between
+  gap: 16px
+  max-width: 1100px
+  width: 100%
+  margin: 0 auto
+  padding: 32px 16px 24px
 
-// Blurry effect for game cards (makes content more readable)
-.game-card::before
-  content: ""
-  position: absolute
-  top: -10px
-  left: -10px
-  right: -10px
-  bottom: -10px
-  background-image: url('https://i.postimg.cc/J0rQ2Hdm/gif.gif')
-  background-size: cover
-  filter: blur(20px)
-  z-index: -1 
+.logo
+  margin: 0
+  font-size: clamp(32px, 7vw, 56px)
+  line-height: 1
+  letter-spacing: 1px
 
-.game-poster
-  object-fit: cover
-  max-width: 210px
-  height: 300px
-  border-radius: 10px
+  a
+    color: $accent
+    text-decoration: none
+    text-shadow: 3px 3px 0 $button-hover, 6px 6px 0 #000
 
-.delete-button
-  position: absolute
-  top: 5px
-  right: 5px
-  background-color: #ff4444
-  color: white
+.header-actions
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  justify-content: center
+  gap: 12px 20px
+
+// Log in / Log out links (filled by auth.js)
+.account-links
+  display: flex
+  align-items: center
+  gap: 10px
+
+.account-name
+  color: $muted
+
+.account-button
+  font: inherit
+  color: $accent
+  background: none
   border: none
-  padding: 5px
+  padding: 0
+  text-decoration: underline
   cursor: pointer
+
+  &:focus-visible
+    outline: 3px solid $focus
+    outline-offset: 3px
 
 // Button for listing an item
 .list-item
-  font-family: "Pixelify Sans", sans-serif
-  font-optical-sizing: auto
-  font-style: normal
+  font-family: $pixel-font
   text-decoration: none
-  position: absolute
-  bottom: 16%
-  left: 50%
-  transform: translateX(-50%)
-  background-color: #288df8
+  background-color: $button
   color: #fff
   border-radius: 5px
-  padding: 10px 20px
-  cursor: pointer
-  transition: background-color 0.3s ease
-  z-index: 1
+  padding: 12px 20px
+  box-shadow: 4px 4px 0 #000
+  transition: background-color 0.3s ease, transform 0.1s ease
+
+  &:hover
+    background-color: $button-hover
+
+  &:active
+    transform: translate(2px, 2px)
+    box-shadow: 2px 2px 0 #000
+
+main
+  max-width: 1100px
+  width: 100%
+  margin: 0 auto
+  padding: 0 16px 48px
+
+.games-status
+  color: $muted
+  text-align: center
+
+  &:empty
+    display: none
+
+.games-list
+  display: grid
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))
+  gap: 24px
+
+.game-card
+  background-color: rgba($card, 0.9)
+  border: 2px solid rgba($accent, 0.5)
+  border-radius: 10px
+  box-shadow: 4px 4px 0 rgba($accent, 0.35)
+  transition: transform 0.15s ease, box-shadow 0.15s ease
+
+  &:hover,
+  &:focus-within
+    transform: translate(-2px, -2px)
+    box-shadow: 6px 6px 0 rgba($accent, 0.6)
+
+  a
+    display: block
+    height: 100%
+    padding: 10px
+    color: inherit
+    text-decoration: none
+    border-radius: 8px
+
+  h2
+    color: $accent
+    font-size: 18px
+    margin: 10px 0 4px
+    overflow-wrap: anywhere
+
+.game-price
+  color: $text
+  margin: 0
+
+.game-poster
+  display: block
+  width: 100%
+  aspect-ratio: 3 / 4
+  object-fit: cover
+  border-radius: 6px
+  background-color: #000
+
+.poster-placeholder
+  display: flex
+  align-items: center
+  justify-content: center
+  color: $muted
+  background-color: #000
+  border: 2px dashed rgba($accent, 0.35)
 
 // Footer section
 footer
-  background-color: #181717
-  color: #fff
-  padding: 20px 0
+  background-color: #08091a
+  border-top: 2px solid $accent
+  color: $text
+  padding: 24px 16px
   margin-top: auto
   width: 100%
-  position: relative
+
+  a
+    color: $accent
 
 .footer-content
   display: flex
-  justify-content: space-around
   flex-wrap: wrap
+  gap: 16px 48px
+  max-width: 1100px
+  margin: 0 auto
 
 .footer-section
-  flex: 1
-  min-width: 200px
-  margin-bottom: 10px
-  margin-left: 10%
+  flex: 1 1 260px
 
-.footer-section h3
-  font-family: "Pixelify Sans", sans-serif
-  font-optical-sizing: auto
-  font-weight: weight
-  font-style: normal 
-  font-size: 16px
-  margin-bottom: 8px
+  h2
+    font-size: 18px
+    margin: 0 0 8px
 
-.footer-section p
-  font-size: 14px
-  line-height: 1.5
+  p
+    font-family: system-ui, sans-serif
+    font-size: 14px
+    line-height: 1.5
+    color: $muted
+    margin: 0 0 6px
 
 .footer-bottom
+  max-width: 1100px
+  margin: 16px auto 0
   text-align: center
-  padding-top: 10px
-  border-top: 1px solid #008cff
+  padding-top: 12px
+  border-top: 1px solid rgba($accent, 0.4)
+  color: $muted
+  font-size: 14px
 
-// Media queries for iPhone 12 Pro
-@media only screen and (min-device-width: 375px) and (max-device-width: 812px)
+// Phones: centre the header and fit two cards per row
+@media (max-width: 480px)
+  .site-header
+    flex-direction: column
+    padding-top: 24px
 
-  .banner-image
-    display: none
+  .games-list
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+    gap: 16px
 
-  game-card
-    display: flex
-    justify-content: center
-    row-gap: 10px
+  .game-card h2
+    font-size: 16px
 
-  .list-item
-    position: relative
-    left: 50%
-    width: 135px
-    margin-bottom: 3%
-    margin-top: 3%
-
-// Media queries for iPad 9th Gen
-@media only screen and (min-device-width: 768px) and (max-device-width: 1024px)
-
-  .banner-image
-    display: none
-    
-  .list-item
-    width: 200px
-    max-height: 400px
+@media (prefers-reduced-motion: reduce)
+  *
+    transition: none !important
